@@ -100,6 +100,24 @@
   .wrow .t.shift{color:var(--red)}.wrow .t.ok{color:var(--teal-ink)}
   .verdict{margin-top:12px;font-size:12.5px;color:var(--ink-2)}
   .verdict b{color:var(--ink)}
+  /* meeting check */
+  .mrow{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:13px;margin-bottom:10px;background:#fff}
+  .mrow.warn{border-color:var(--amber-line);background:#FFFDF7}
+  .mrow.ok{border-color:#CBEBE4;background:#FbFEFD}
+  .mrow .st{flex:none;display:inline-flex;align-items:center;gap:6px;font:700 11px Inter;padding:5px 9px;border-radius:999px;margin-top:2px;white-space:nowrap}
+  .mrow.warn .st{background:var(--amber-soft);color:#9A6A12;border:1px solid var(--amber-line)}
+  .mrow.ok .st{background:var(--teal-soft);color:var(--teal-ink);border:1px solid #BFE9E2}
+  .mrow .info{flex:1;min-width:0}
+  .mrow .info .ttl{font-weight:700;font-size:14.5px}
+  .mrow .info .meta{font-size:12.5px;color:var(--muted);margin-top:1px}
+  .mrow .info .reason{font-size:13px;color:var(--ink-2);margin-top:7px}
+  .mrow .info .reason b{color:var(--ink)}
+  .mrow .act{flex:none;align-self:center}
+  .mrow .fix{border:0;border-radius:9px;padding:9px 13px;font:600 12.5px Inter;background:var(--indigo);color:#fff;cursor:pointer}
+  .mrow .fix:hover{background:var(--indigo-ink)}
+  .mrow .done{font:600 12.5px Inter;color:var(--teal-ink)}
+  .checkbar{display:flex;align-items:center;gap:10px;margin:2px 0 16px;font-size:13px}
+  .checkbar .n{font:800 15px "Plus Jakarta Sans"}.checkbar .warn{color:#9A6A12}.checkbar .ok{color:var(--teal-ink)}
   footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:12.5px}
   footer .wrap{padding:16px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 </style>
@@ -179,6 +197,21 @@
         <div class="rcpt" id="rcpt"></div>
         <button class="btn ghost" id="again">← Pick another time</button>
       </div>
+    </div>
+  </section>
+</div>
+
+<!-- MEETING CHECK -->
+<div class="wrap" style="padding-bottom:8px">
+  <section class="card">
+    <div class="bd">
+      <div class="dsthead">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4" stroke="#4B5BD6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="#4B5BD6" stroke-width="1.7"/></svg>
+        <h2>Check meetings already on the books</h2>
+      </div>
+      <p class="dstsub">New bookings are safe by design. But meetings created the old way can still be wrong. Kestrel audits each upcoming meeting and flags anything that will drift on a daylight-saving change or was saved without a timezone — so you can re-anchor it before a customer shows up at the wrong time.</p>
+      <div class="checkbar" id="checkBar"></div>
+      <div id="checkList"></div>
     </div>
   </section>
 </div>
@@ -335,7 +368,51 @@
       '</div></div>';
   }
 
-  render();
+  // ---- meeting audit (check existing meetings) ----
+  var MEETINGS=[
+    {title:"Weekly partner sync", acct:"Marlow Legal", host:"America/New_York", inv:"Europe/London", y:2026,m:11,d:9, hh:10,mm:0, stored:"frozen"},
+    {title:"Product demo",        acct:"Fennick Studio", host:"America/New_York", inv:"Europe/Berlin", y:2026,m:12,d:1, hh:15,mm:0, stored:"no_zone"},
+    {title:"Renewal review",      acct:"Juniper Labs",  host:"America/New_York", inv:"America/Los_Angeles", y:2026,m:11,d:16, hh:13,mm:0, stored:"frozen"},
+    {title:"Exec onboarding",     acct:"Corvane Partners", host:"America/New_York", inv:"Europe/London", y:2026,m:12,d:7, hh:11,mm:0, stored:"anchored"}
+  ];
+  window.__fixMeeting=function(i){MEETINGS[i].stored="anchored";MEETINGS[i].fixed=true;renderCheck();};
+  function audit(m){
+    var correct=wallToInstant(m.y,m.m,m.d,m.hh,m.mm,m.host);
+    if(m.stored==="anchored")
+      return {ok:true,correct:correct,reason:"Anchored to "+label(m.host)+". The same moment for everyone — survives daylight-saving changes."};
+    if(m.stored==="no_zone")
+      return {ok:false,correct:correct,reason:"<b>No timezone saved.</b> Your invitee in "+label(m.inv)+" could read "+fmt(correct,m.host).replace(/\s?[AP]M/,'')+" on their own clock and join at the wrong hour."};
+    // frozen: offset captured in Oct (EDT); wrong after the Nov 2 DST change
+    var frozenOff=tzOffsetMin(wallToInstant(2026,10,15,m.hh,m.mm,m.host),m.host);
+    var wrong=new Date(Date.UTC(m.y,m.m-1,m.d,m.hh,m.mm)-frozenOff*60000);
+    if(fmt(wrong,m.host)!==fmt(correct,m.host))
+      return {ok:false,correct:correct,reason:"<b>Stored as a clock reading.</b> After daylight saving it shows <b>"+fmt(wrong,m.host)+" "+zoneName(wrong,m.host)+"</b> to the host instead of "+fmt(correct,m.host)+" — a one-hour drift."};
+    return {ok:true,correct:correct,reason:"Stored as a clock reading, but no daylight-saving change falls before this date — currently fine."};
+  }
+  function renderCheck(){
+    var list=document.getElementById("checkList"); list.innerHTML="";
+    var warn=0;
+    MEETINGS.forEach(function(m,i){
+      var a=audit(m), end=new Date(a.correct.getTime()+DUR*60000);
+      if(!a.ok) warn++;
+      var times=fmt(a.correct,m.host)+" "+zoneName(a.correct,m.host)+" <span style='color:var(--muted)'>· "+fmt(a.correct,m.inv)+" "+zoneName(a.correct,m.inv)+" for "+label(m.inv)+"</span>";
+      var row=document.createElement("div");
+      row.className="mrow "+(a.ok?"ok":"warn");
+      row.innerHTML=
+        '<span class="st">'+(a.ok?'✓ Safe':'⚠ At risk')+'</span>'+
+        '<div class="info"><div class="ttl">'+m.title+' · '+m.acct+'</div>'+
+          '<div class="meta">'+fmt(a.correct,m.host,{weekday:"short",day:"numeric",month:"short",hour:undefined,minute:undefined})+' · should be '+times+'</div>'+
+          '<div class="reason">'+a.reason+'</div></div>'+
+        '<div class="act">'+(a.ok?(m.fixed?'<span class="done">✓ Re-anchored</span>':''):'<button class="fix" onclick="__fixMeeting('+i+')">Re-anchor</button>')+'</div>';
+      list.appendChild(row);
+    });
+    var bar=document.getElementById("checkBar");
+    bar.innerHTML = warn
+      ? '<span class="n warn">'+warn+'</span><span>meeting'+(warn>1?'s':'')+' need re-anchoring before they drift</span>'
+      : '<span class="n ok">✓ All clear</span><span>every meeting is anchored and daylight-saving safe</span>';
+  }
+
+  render(); renderCheck();
 })();
 </script>
 </body>
