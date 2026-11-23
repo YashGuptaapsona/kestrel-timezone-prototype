@@ -123,6 +123,13 @@
   .mrow .done{font:600 12.5px Inter;color:var(--teal-ink)}
   .checkbar{display:flex;align-items:center;gap:10px;margin:2px 0 16px;font-size:13px}
   .checkbar .n{font:800 15px "Plus Jakarta Sans"}.checkbar .warn{color:#9A6A12}.checkbar .ok{color:var(--teal-ink)}
+  @media(max-width:460px){
+    .bar{flex-wrap:nowrap}
+    .pill{font-size:11px;padding:3px 9px;white-space:nowrap;margin-left:4px}
+    .ship{display:none}
+    .intro h1{font-size:23px}
+    .tzbar .swap{display:none}
+  }
   footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:12.5px}
   footer .wrap{padding:16px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 </style>
