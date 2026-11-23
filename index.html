@@ -59,10 +59,15 @@
   .bkhead{display:flex;align-items:center;gap:13px;margin-bottom:12px}
   .bkhead .av{width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#2E3AA3,#4B5BD6);color:#fff;display:grid;place-items:center;font:800 16px "Plus Jakarta Sans"}
   .bkhead b{font-size:16px}.bkhead span{color:var(--muted);font-size:13px}
-  .tzbanner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#EEF0FD;border:1px solid #DDE1FA;border-radius:12px;padding:10px 14px;font-size:13px;color:var(--indigo-ink);margin-bottom:16px}
-  .tzbanner .dot{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
-  .tzbanner select{width:auto;min-width:220px;padding:7px 34px 7px 10px;font-size:13px;margin-left:auto}
+  .tzbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#F4F6FC;border:1px solid var(--line);border-radius:13px;padding:11px 15px;margin-bottom:16px}
+  .tzbar .side{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+  .tzbar .mut{color:var(--muted)}
+  .tzbar .side b{color:var(--ink);font-weight:700}
+  .tzbar .swap{color:var(--muted);font-size:15px;margin:0 -2px}
+  .tzsel{width:auto;min-width:148px;padding:7px 30px 7px 11px;font-size:13px;font-weight:600;color:var(--indigo-ink);background-color:#fff}
+  .tzbar .auto{font:700 9.5px Inter;letter-spacing:.05em;text-transform:uppercase;color:var(--teal-ink);background:var(--teal-soft);border:1px solid #BFE9E2;padding:3px 7px;border-radius:999px}
   .daynav{font-weight:700;font-size:15px;margin:2px 0 14px}
+  .empty{padding:22px 14px;text-align:center;color:var(--muted);font-size:13px;border:1px dashed var(--line);border-radius:12px}
   .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
   .slot{border:1.5px solid var(--teal);border-radius:12px;padding:11px 12px;cursor:pointer;transition:.14s;background:#fff;text-align:left}
   .slot:hover{background:var(--teal-soft)}
@@ -164,8 +169,7 @@
         </select>
       </div>
       <div class="clockbox">
-        <div class="r"><span>Maya's local time now</span><b id="hostNow">—</b></div>
-        <div class="r"><span>Stored as</span><b>exact moment + zone</b></div>
+        <div class="r"><span>Every booking is stored as</span><b>an exact moment + zone</b></div>
       </div>
       <div class="badge">✓ DST-safe — anchored to the moment, not a clock reading</div>
     </div>
@@ -180,10 +184,13 @@
           <div class="av">MR</div>
           <div><b>Intro call with Maya Raman</b><br><span>30 min · video · hosted on Kestrel</span></div>
         </div>
-        <div class="tzbanner">
-          <span class="dot"></span>
-          <span>Times shown in <b id="invName">your timezone</b> — auto-detected. Not you?</span>
-          <select id="invTz"></select>
+        <div class="tzbar">
+          <div class="side"><span class="mut">You're booking in</span>
+            <select id="invTz" class="tzsel"></select>
+            <span class="auto" id="autoTag">auto-detected</span>
+          </div>
+          <span class="swap" aria-hidden="true">↔</span>
+          <div class="side"><span class="mut">Maya is in</span> <b id="hostZoneLabel">New York · EST</b></div>
         </div>
         <div class="daynav" id="dayLabel">Thursday, 26 November 2026</div>
         <div class="slots" id="slots"></div>
@@ -239,20 +246,22 @@
 (function(){
   var DUR=30;
   var ZONES=[
-    ["America/New_York","New York","EST/EDT"],
-    ["America/Los_Angeles","Los Angeles","PST/PDT"],
-    ["America/Chicago","Chicago","CST/CDT"],
-    ["Europe/London","London","GMT/BST"],
-    ["Europe/Berlin","Berlin","CET/CEST"],
-    ["Asia/Kolkata","Mumbai / Bengaluru","IST"],
+    ["America/New_York","New York","EST"],
+    ["America/Los_Angeles","Los Angeles","PST"],
+    ["America/Chicago","Chicago","CST"],
+    ["Europe/London","London","GMT"],
+    ["Europe/Berlin","Berlin","CET"],
+    ["Asia/Kolkata","Kolkata","IST"],
     ["Asia/Singapore","Singapore","SGT"],
     ["Asia/Tokyo","Tokyo","JST"],
-    ["Australia/Sydney","Sydney","AEST/AEDT"]
+    ["Australia/Sydney","Sydney","AEDT"]
   ];
+  var ABBR={"Asia/Kolkata":"IST","Asia/Calcutta":"IST","Asia/Singapore":"SGT","Asia/Tokyo":"JST","Asia/Dubai":"GST","Asia/Shanghai":"CST","Asia/Hong_Kong":"HKT","Asia/Dhaka":"BST","Asia/Karachi":"PKT"};
   var DATE={y:2026,m:11,d:26};              // Thu 26 Nov 2026
   var host="America/New_York";
   var inv=(Intl.DateTimeFormat().resolvedOptions().timeZone)||"Europe/London";
-  if(!ZONES.some(function(z){return z[0]===inv;})) ZONES.unshift([inv, inv.split("/").pop().replace(/_/g," "), "local"]);
+  if(inv==="Asia/Calcutta") inv="Asia/Kolkata";   // normalise legacy alias
+  if(!ZONES.some(function(z){return z[0]===inv;})) ZONES.unshift([inv, inv.split("/").pop().replace(/_/g," "), ABBR[inv]||"local"]);
   var hoursStart=9, hoursEnd=17;
 
   // ---- timezone math (real DST via Intl) ----
@@ -276,8 +285,10 @@
     return new Intl.DateTimeFormat("en-US",Object.assign({timeZone:tz,hour:"numeric",minute:"2-digit",hour12:true},opt||{})).format(ts);
   }
   function zoneName(ts,tz){
+    if(ABBR[tz]) return ABBR[tz];
     var p=new Intl.DateTimeFormat("en-US",{timeZone:tz,timeZoneName:"short"}).formatToParts(ts).find(function(x){return x.type==="timeZoneName";});
-    return p?p.value:"";
+    var v=p?p.value:"";
+    return /^GMT[+-]/.test(v)?v.replace("GMT","UTC"):v;   // tidy any raw offset fallbacks
   }
   function label(tz){var z=ZONES.find(function(x){return x[0]===tz;});return z?z[1]:tz;}
   function dateKey(ts,tz){return new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit"}).format(ts);}
@@ -298,32 +309,34 @@
 
   // ---- render booking page ----
   function render(){
-    document.getElementById("invName").textContent=label(inv);
-    var now=new Date();
-    document.getElementById("hostNow").textContent=fmt(now,host,{weekday:"short"})+" "+zoneName(now,host);
-
     var dref0=wallToInstant(DATE.y,DATE.m,DATE.d,12,0,host);
+    // one place for timezone context: the bar
+    document.getElementById("hostZoneLabel").textContent=label(host)+" · "+zoneName(dref0,host);
+    var det=(Intl.DateTimeFormat().resolvedOptions().timeZone||"").replace("Asia/Calcutta","Asia/Kolkata");
+    document.getElementById("autoTag").style.display = (inv===det)?"inline-block":"none";
+
     var hdrKey=dateKey(dref0,inv);
-    var slots=document.getElementById("slots");slots.innerHTML="";
+    var slots=document.getElementById("slots");slots.innerHTML="";var shown=0;
     for(var h=hoursStart;h<hoursEnd;h++){
       [0,30].forEach(function(mm){
         var inst=wallToInstant(DATE.y,DATE.m,DATE.d,h,mm,host);
+        var ih=(+new Intl.DateTimeFormat("en-US",{timeZone:inv,hour:"numeric",hour12:false}).format(inst))%24;
+        if(ih<6||ih>21) return;                         // don't offer the invitee the dead of night
+        shown++;
         var crosses=dateKey(inst,inv)!==hdrKey;
         var el=document.createElement("button");el.className="slot";
-        el.innerHTML='<div class="big">'+fmt(inst,inv)+'<span class="z">'+zoneName(inst,inv)+'</span>'
+        el.innerHTML='<div class="big">'+fmt(inst,inv)
                     +(crosses?'<span class="nd">'+fmt(inst,inv,{weekday:"short",month:"short",day:"numeric",hour:undefined,minute:undefined})+'</span>':'')
-                    +'</div><div class="sub">'+fmt(inst,host)+' '+zoneName(inst,host)+' · Maya\'s time</div>';
+                    +'</div><div class="sub">Maya · '+fmt(inst,host)+'</div>';
         el.onclick=function(){book(inst);};
         slots.appendChild(el);
       });
     }
-    var sameZone = inv===host;
-    document.getElementById("hint").innerHTML = sameZone
-      ? "You and Maya are in the same timezone. Try switching your timezone above to see every slot convert instantly."
-      : "Every slot is the <b>same moment</b> for Maya — just written in your timezone and hers. Switch your timezone above and watch them convert.";
-    // day label in invitee zone
-    var dref=wallToInstant(DATE.y,DATE.m,DATE.d,12,0,host);
-    document.getElementById("dayLabel").textContent=fmt(dref,inv,{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:undefined,minute:undefined});
+    if(!shown) slots.innerHTML='<div class="empty">No comfortable overlap on this day — Maya\'s hours fall in your night. Try another timezone above.</div>';
+    document.getElementById("dayLabel").textContent=fmt(dref0,inv,{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:undefined,minute:undefined});
+    document.getElementById("hint").innerHTML = (inv===host)
+      ? "All times are in your timezone. Switch it above and every slot re-converts instantly."
+      : "Shown in <b>your</b> time; “Maya ·” is the same moment in hers. Only times that land in your daytime are offered.";
     renderDst();
   }
 
